@@ -57,8 +57,11 @@ def submit_bridge_captcha(captcha_id, captcha_text, request_session):
     return submit_bridge_captcha_request["data"][0]["bridges"]
 
 
-if __name__ == "__main__":
+def solve_bridges():
     img_resp = fetch_bridge_captcha(save_raw_captcha=True)
     text_resp = solve_bridge_captcha(img_resp["img_b64"])["text"]
     res = submit_bridge_captcha(img_resp["captcha_id"], text_resp, img_resp["request_session"])
-    print(res)
+    return res
+
+if __name__ == "__main__":
+    print(solve_bridges())
