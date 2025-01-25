@@ -1,6 +1,13 @@
 import requests
 import ollama
 
+debug = False
+
+headers = {
+    'Content-Type': 'application/vnd.api+json',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+}
+
 def fetch_bridge_captcha(save_raw_captcha=False):
     request_session = requests.Session()
     bridge_captcha_request = request_session.get("https://bridges.torproject.org/moat/fetch").json()
@@ -31,12 +38,7 @@ def solve_bridge_captcha(img_b64):
     }
 
 
-def submit_bridge_captcha(captcha_id, captcha_text, request_session):
-    headers = {
-        'Content-Type': 'application/vnd.api+json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    }
-    
+def submit_bridge_captcha(captcha_id, captcha_text, request_session):    
     submit_bridge_captcha_request = request_session.post(
         "https://bridges.torproject.org/moat/check",
         headers=headers,
@@ -61,6 +63,10 @@ def solve_bridges():
     img_resp = fetch_bridge_captcha(save_raw_captcha=True)
     text_resp = solve_bridge_captcha(img_resp["img_b64"])["text"]
     res = submit_bridge_captcha(img_resp["captcha_id"], text_resp, img_resp["request_session"])
+    res = {"bridges": res}
+    if debug:
+        res["img_resp"] = img_resp
+        res["text_resp"] = text_resp
     return res
 
 if __name__ == "__main__":
