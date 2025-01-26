@@ -18,24 +18,25 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     env:
-      DOCKERFILE_PATH: /
-      OFFICIAL_TAG: ${{ steps.retrieve-credentials.outputs.docker_username }}/myproject:latest
-      MAIN_REPO_NAME: ${{ steps.retrieve-credentials.outputs.docker_username }}/myproject
+        DOCKERHUB_USERNAME: zibdie
+        OFFICIAL_TAG: zibdie/llama-vision-fetchbridges:latest
+        MAIN_REPO_NAME: zibdie/llama-vision-fetchbridges
+        DOCKERFILE_PATH: /
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Retrieve Docker Credentials
       id: retrieve-credentials
       run: |
         echo "Retrieving Docker credentials..."
         if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          $headers = @{ "Authorization" = "Bearer ${{ secrets.AUTH_TOKEN }}" }
-          $body = @{ "key_request" = @("DOCKERHUB_USER", "DOCKERHUB_KEY") } | ConvertTo-Json
+          $headers = @{ "Authorization" = "${{ secrets.AUTH_TOKEN }}" }
+          $body = @{ "key_request" = @("DOCKERHUB_KEY") } | ConvertTo-Json
           $response = Invoke-RestMethod -Uri "${{ secrets.ENDPOINT_URL }}" -Method Post -Headers $headers -Body $body -ContentType "application/json"
           if ($response.success -eq $true) {
-            $dockerUser = $response.keys.DOCKERHUB_USER
+            $dockerUser = ${{ env.DOCKERHUB_USERNAME }}
             $dockerKey = $response.keys.DOCKERHUB_KEY
             echo "::set-output name=docker_username::$dockerUser"
             echo "::set-output name=docker_password::$dockerKey"
@@ -44,12 +45,12 @@ jobs:
           }
         else
           response=$(curl -s -X POST "${{ secrets.ENDPOINT_URL }}" \
-            -H "Authorization: Bearer ${{ secrets.AUTH_TOKEN }}" \
+            -H "Authorization: ${{ secrets.AUTH_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{"key_request": ["DOCKERHUB_USER", "DOCKERHUB_KEY"]}')
+            -d '{"key_request": ["DOCKERHUB_KEY"]}')
           success=$(echo $response | jq -r '.success')
           if [ "$success" == "true" ]; then
-            dockerUser=$(echo $response | jq -r '.keys.DOCKERHUB_USER')
+            dockerUser=${{ env.DOCKERHUB_USERNAME }}
             dockerKey=$(echo $response | jq -r '.keys.DOCKERHUB_KEY')
             echo "::set-output name=docker_username::$dockerUser"
             echo "::set-output name=docker_password::$dockerKey"
@@ -66,10 +67,10 @@ jobs:
       run: |
         echo "Logging in to Docker Hub using API..."
         if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          $base64Auth = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("{\"username\":\"${{ steps.retrieve-credentials.outputs.docker_username }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}"))
+          $base64Auth = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("{\"username\":\"${{ env.DOCKERHUB_USERNAME }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}"))
           Invoke-RestMethod -Uri http://localhost/v1.24/auth -Method Post -Headers @{"X-Registry-Auth"=$base64Auth}
         else
-          base64Auth=$(echo -n "{\"username\":\"${{ steps.retrieve-credentials.outputs.docker_username }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}" | base64)
+          base64Auth=$(echo -n "{\"username\":\"${{ env.DOCKERHUB_USERNAME }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}" | base64)
           curl --unix-socket /var/run/docker.sock -X POST "http://localhost/v1.24/auth" -H "X-Registry-Auth: $base64Auth"
         fi
 
