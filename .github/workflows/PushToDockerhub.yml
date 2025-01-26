@@ -1,0 +1,82 @@
+# .github/workflows/build-docker.yml
+name: Build Docker Image
+
+on:
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  #   branches:
+  #     - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    env:
+      DOCKERFILE_PATH: /
+      OFFICIAL_TAG: ${{ steps.retrieve-credentials.outputs.docker_username }}/myproject:latest
+      MAIN_REPO_NAME: ${{ steps.retrieve-credentials.outputs.docker_username }}/myproject
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Retrieve Docker Credentials
+      id: retrieve-credentials
+      run: |
+        echo "Retrieving Docker credentials..."
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          $headers = @{ "Authorization" = "Bearer ${{ secrets.AUTH_TOKEN }}" }
+          $body = @{ "key_request" = @("DOCKERHUB_USER", "DOCKERHUB_KEY") } | ConvertTo-Json
+          $response = Invoke-RestMethod -Uri "${{ secrets.ENDPOINT_URL }}" -Method Post -Headers $headers -Body $body -ContentType "application/json"
+          if ($response.success -eq $true) {
+            $dockerUser = $response.keys.DOCKERHUB_USER
+            $dockerKey = $response.keys.DOCKERHUB_KEY
+            echo "::set-output name=docker_username::$dockerUser"
+            echo "::set-output name=docker_password::$dockerKey"
+          } else {
+            throw "Failed to retrieve Docker credentials"
+          }
+        else
+          response=$(curl -s -X POST "${{ secrets.ENDPOINT_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.AUTH_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"key_request": ["DOCKERHUB_USER", "DOCKERHUB_KEY"]}')
+          success=$(echo $response | jq -r '.success')
+          if [ "$success" == "true" ]; then
+            dockerUser=$(echo $response | jq -r '.keys.DOCKERHUB_USER')
+            dockerKey=$(echo $response | jq -r '.keys.DOCKERHUB_KEY')
+            echo "::set-output name=docker_username::$dockerUser"
+            echo "::set-output name=docker_password::$dockerKey"
+          else
+            echo "Failed to retrieve Docker credentials"
+            exit 1
+          fi
+        fi
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Docker Login using API
+      run: |
+        echo "Logging in to Docker Hub using API..."
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          $base64Auth = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("{\"username\":\"${{ steps.retrieve-credentials.outputs.docker_username }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}"))
+          Invoke-RestMethod -Uri http://localhost/v1.24/auth -Method Post -Headers @{"X-Registry-Auth"=$base64Auth}
+        else
+          base64Auth=$(echo -n "{\"username\":\"${{ steps.retrieve-credentials.outputs.docker_username }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}" | base64)
+          curl --unix-socket /var/run/docker.sock -X POST "http://localhost/v1.24/auth" -H "X-Registry-Auth: $base64Auth"
+        fi
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: ${{ env.DOCKERFILE_PATH }}
+        file: Dockerfile
+        push: false
+        tags: ${{ env.OFFICIAL_TAG }}
