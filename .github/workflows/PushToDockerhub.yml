@@ -25,8 +25,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          buildkitd-flags: --debug
+
+      - name: Create .nomodelbuild file
+        run: echo "Download model during runtime..." > .nomodelbuild
 
       - name: Retrieve Docker Credentials
         id: retrieve-credentials
