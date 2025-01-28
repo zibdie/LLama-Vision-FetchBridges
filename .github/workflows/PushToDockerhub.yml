@@ -21,60 +21,68 @@ jobs:
         DOCKERFILE_PATH: /
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Retrieve Docker Credentials
-      id: retrieve-credentials
-      run: |
-        echo "Retrieving Docker credentials..."
-        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          $headers = @{ "Authorization" = "${{ secrets.AUTH_TOKEN }}" }
-          $body = @{ "key_request" = @("DOCKERHUB_KEY") } | ConvertTo-Json
-          $response = Invoke-RestMethod -Uri "${{ secrets.ENDPOINT_URL }}" -Method Post -Headers $headers -Body $body -ContentType "application/json"
-          if ($response.success -eq $true) {
-            $dockerUser = ${{ env.DOCKERHUB_USERNAME }}
-            $dockerKey = $response.keys.DOCKERHUB_KEY
-            echo "docker_username=$dockerUser" >> $GITHUB_ENV
-            echo "docker_password=$dockerKey" >> $GITHUB_ENV
-          } else {
-            throw "Failed to retrieve Docker credentials"
-          }
-        else
-          response=$(curl -s -X POST "${{ secrets.ENDPOINT_URL }}" \
-            -H "Authorization: ${{ secrets.AUTH_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{"key_request": ["DOCKERHUB_KEY"]}')
-          success=$(echo $response | grep -o '"success":true')
-          if [ "$success" ]; then
-            dockerUser=${{ env.DOCKERHUB_USERNAME }}
-            dockerKey=$(echo $response | grep -o '"DOCKERHUB_KEY":"[^"]*' | cut -d'"' -f4)
-            echo "docker_username=$dockerUser" >> $GITHUB_ENV
-            echo "docker_password=$dockerKey" >> $GITHUB_ENV
+      - name: Checkout code
+        uses: actions/checkout@v4
+  
+      - name: Retrieve Docker Credentials
+        id: retrieve-credentials
+        run: |
+          echo "Retrieving Docker credentials..."
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # Windows PowerShell syntax
+            pwsh -Command "
+              \$headers = @{ 'Authorization' = '${{ secrets.AUTH_TOKEN }}' }
+              \$body = @{ 'key_request' = @('DOCKERHUB_KEY') } | ConvertTo-Json
+              \$response = Invoke-RestMethod -Uri '${{ secrets.ENDPOINT_URL }}' -Method Post -Headers \$headers -Body \$body -ContentType 'application/json'
+              if (\$response.success -eq \$true) {
+                \$dockerUser = '${{ env.DOCKERHUB_USERNAME }}'
+                \$dockerKey = \$response.keys.DOCKERHUB_KEY
+                echo 'docker_username=\$dockerUser' >> \$env:GITHUB_ENV
+                echo 'docker_password=\$dockerKey' >> \$env:GITHUB_ENV
+              } else {
+                throw 'Failed to retrieve Docker credentials'
+              }
+            "
           else
-            echo "Failed to retrieve Docker credentials"
-            exit 1
+            # Linux/Mac Bash syntax
+            response=$(curl -s -X POST "${{ secrets.ENDPOINT_URL }}" \
+              -H "Authorization: ${{ secrets.AUTH_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d '{"key_request": ["DOCKERHUB_KEY"]}')
+            success=$(echo $response | grep -o '"success":true')
+            if [ "$success" ]; then
+              dockerUser=${{ env.DOCKERHUB_USERNAME }}
+              dockerKey=$(echo $response | grep -o '"DOCKERHUB_KEY":"[^"]*' | cut -d'"' -f4)
+              echo "docker_username=$dockerUser" >> $GITHUB_ENV
+              echo "docker_password=$dockerKey" >> $GITHUB_ENV
+            else
+              echo "Failed to retrieve Docker credentials"
+              exit 1
+            fi
           fi
-        fi
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-
-    - name: Docker Login using API
-      run: |
-        echo "Logging in to Docker Hub using API..."
-        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          $base64Auth = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("{\"username\":\"${{ env.DOCKERHUB_USERNAME }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}"))
-          Invoke-RestMethod -Uri http://localhost/v1.24/auth -Method Post -Headers @{"X-Registry-Auth"=$base64Auth}
-        else
-          base64Auth=$(echo -n "{\"username\":\"${{ env.DOCKERHUB_USERNAME }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}" | base64)
-          curl --unix-socket /var/run/docker.sock -X POST "http://localhost/v1.24/auth" -H "X-Registry-Auth: $base64Auth"
-        fi
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v4
-      with:
-        context: ${{ env.DOCKERFILE_PATH }}
-        file: Dockerfile
-        push: false
-        tags: ${{ env.OFFICIAL_TAG }}
+  
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+  
+      - name: Docker Login using API
+        run: |
+          echo "Logging in to Docker Hub using API..."
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # Windows PowerShell syntax
+            pwsh -Command "
+              \$base64Auth = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{\"username\":\"${{ env.DOCKERHUB_USERNAME }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}'))
+              Invoke-RestMethod -Uri 'http://localhost/v1.24/auth' -Method Post -Headers @{ 'X-Registry-Auth' = \$base64Auth }
+            "
+          else
+            # Linux/Mac Bash syntax
+            base64Auth=$(echo -n "{\"username\":\"${{ env.DOCKERHUB_USERNAME }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}" | base64)
+            curl --unix-socket /var/run/docker.sock -X POST "http://localhost/v1.24/auth" -H "X-Registry-Auth: $base64Auth"
+          fi
+  
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ${{ env.DOCKERFILE_PATH }}
+          file: Dockerfile
+          push: false
+          tags: ${{ env.OFFICIAL_TAG }}
