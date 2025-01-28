@@ -12,7 +12,7 @@ jobs:
         DOCKERHUB_USERNAME: zibdie
         OFFICIAL_TAG: zibdie/llama-vision-fetchbridges:latest
         MAIN_REPO_NAME: zibdie/llama-vision-fetchbridges
-        DOCKERFILE_PATH: /
+        DOCKERFILE_PATH: ./
 
     steps:
       - name: Checkout code
