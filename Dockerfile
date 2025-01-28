@@ -5,10 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Update package lists and install necessary packages
-RUN apt-get clean && apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get clean && apt-get update && apt-get install -y --no-install-recommends curl wget
 
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
