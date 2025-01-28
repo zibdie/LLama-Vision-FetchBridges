@@ -4,19 +4,10 @@ on:
   push:
     branches:
       - dockertest
-  workflow_dispatch:
-    inputs:
-      branch:
-        type: string
-        default: dockertest
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-      fail-fast: false
+    runs-on: ubuntu-latest
     env:
         DOCKERHUB_USERNAME: zibdie
         OFFICIAL_TAG: zibdie/llama-vision-fetchbridges:latest
@@ -26,86 +17,59 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-  
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-flags: --debug
+
       - name: Retrieve Docker Credentials
         id: retrieve-credentials
         run: |
           echo "Retrieving Docker credentials..."
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            # Windows PowerShell (unchanged)
-            pwsh -Command "
-              try {
-                # Set up headers including User-Agent
-                \$headers = @{ 
-                  'Authorization' = '${{ secrets.AUTH_TOKEN }}'
-                  'User-Agent' = '${{ secrets.GH_USER_AGENT }}'  # Add custom User-Agent here
-                }
-                \$body = @{ 'key_request' = @('DOCKERHUB_KEY') } | ConvertTo-Json
-                \$response = Invoke-RestMethod -Uri '${{ secrets.ENDPOINT_URL }}' -Method Post -Headers \$headers -Body \$body -ContentType 'application/json'
-                
-                # Check the response
-                Write-Host 'Response: ' \$response
-      
-                if (\$response.success -eq \$true) {
-                  \$dockerUser = '${{ env.DOCKERHUB_USERNAME }}'
-                  \$dockerKey = \$response.keys.DOCKERHUB_KEY
-                  Write-Host 'docker_username=\$dockerUser'
-                  Write-Host 'docker_password=\$dockerKey'
-                  echo 'docker_username=\$dockerUser' >> \$env:GITHUB_ENV
-                  echo 'docker_password=\$dockerKey' >> \$env:GITHUB_ENV
-                } else {
-                  throw 'Failed to retrieve Docker credentials'
-                }
-              } catch {
-                Write-Error 'Error retrieving Docker credentials: $_'
-                exit 1
-              }
-            "
+          response=$(curl -s -X POST "${{ secrets.ENDPOINT_URL }}" \
+            -H "Authorization: ${{ secrets.AUTH_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: ${{ secrets.GH_USER_AGENT }}" \
+            -d '{"key_request": ["DOCKERHUB_KEY"]}')
+
+          echo "Response: $response"
+
+          success=$(echo $response | grep -o '"success":true')
+          if [ "$success" ]; then
+            dockerUser=${{ env.DOCKERHUB_USERNAME }}
+            dockerKey=$(echo $response | grep -o '"DOCKERHUB_KEY":"[^"]*' | cut -d'"' -f4)
+            echo "docker_username=$dockerUser" >> $GITHUB_ENV
+            echo "docker_password=$dockerKey" >> $GITHUB_ENV
           else
-            # Linux/Mac Bash
-            response=$(curl -s -X POST "${{ secrets.ENDPOINT_URL }}" \
-              -H "Authorization: ${{ secrets.AUTH_TOKEN }}" \
-              -H "Content-Type: application/json" \
-              -H "User-Agent: ${{ secrets.GH_USER_AGENT }}" \
-              -d '{"key_request": ["DOCKERHUB_KEY"]}')  # Ensure proper syntax for -d flag
-                  
-            # Debugging output: Print the response
-            echo "Response: $response"
-      
-            success=$(echo $response | grep -o '"success":true')
-            if [ "$success" ]; then
-              dockerUser=${{ env.DOCKERHUB_USERNAME }}
-              dockerKey=$(echo $response | grep -o '"DOCKERHUB_KEY":"[^"]*' | cut -d'"' -f4)
-              echo "docker_username=$dockerUser" >> $GITHUB_ENV
-              echo "docker_password=$dockerKey" >> $GITHUB_ENV
-            else
-              echo "Failed to retrieve Docker credentials"
-              exit 1
-            fi
+            echo "Failed to retrieve Docker credentials" >&2
+            exit 1
           fi
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-  
-      - name: Docker Login using API
+      - name: Log in to Docker Hub
         run: |
-          echo "Logging in to Docker Hub using API..."
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            # Windows PowerShell syntax
-            pwsh -Command "
-              \$base64Auth = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{\"username\":\"${{ env.DOCKERHUB_USERNAME }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}'))
-              Invoke-RestMethod -Uri 'http://localhost/v1.24/auth' -Method Post -Headers @{ 'X-Registry-Auth' = \$base64Auth }
-            "
-          else
-            # Linux/Mac Bash syntax
-            base64Auth=$(echo -n "{\"username\":\"${{ env.DOCKERHUB_USERNAME }}\",\"password\":\"${{ steps.retrieve-credentials.outputs.docker_password }}\"}" | base64)
-            curl --unix-socket /var/run/docker.sock -X POST "http://localhost/v1.24/auth" -H "X-Registry-Auth: $base64Auth"
-          fi
-  
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v4
+          echo "Logging in to Docker Hub..."
+          echo "${{ env.docker_password }}" | docker login -u "${{ env.docker_username }}" --password-stdin
+
+      - name: Build and push multi-platform Docker image
+        uses: docker/build-push-action@v6
         with:
           context: ${{ env.DOCKERFILE_PATH }}
           file: Dockerfile
-          push: false
+          platforms: linux/amd64,linux/arm64,linux/arm
+          push: true
           tags: ${{ env.OFFICIAL_TAG }}
+
+      - name: Docker Hub Description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.docker_username }}
+          password: ${{ secrets.docker_password }}
+          repository: zibdie/llama-vision-fetchbridges
+          readme-filepath: ./README.md
+
