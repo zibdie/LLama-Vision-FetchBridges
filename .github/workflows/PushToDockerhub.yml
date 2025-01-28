@@ -3,7 +3,7 @@ name: Build Docker Image
 on:
   push:
     branches:
-      - dockertest
+      - main
 
 jobs:
   build:
@@ -60,7 +60,7 @@ jobs:
         run: |
           content=$(cat README.md)
           escaped_content=$(echo "$content" | jq -Rsa .)
-          echo "::set-output name=content::$escaped_content"
+          echo "content=$escaped_content" >> $GITHUB_OUTPUT
 
       - name: Build and push multi-platform Docker image with metadata
         uses: docker/build-push-action@v6
