@@ -1,6 +1,9 @@
 name: Build Docker Image
 
 on:
+  push:
+    branches:
+      - dockertest
   workflow_dispatch:
 
 jobs:
@@ -9,6 +12,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+      fail-fast: false
 
     env:
         DOCKERHUB_USERNAME: zibdie
@@ -41,10 +45,10 @@ jobs:
             -H "Authorization: ${{ secrets.AUTH_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"key_request": ["DOCKERHUB_KEY"]}')
-          success=$(echo $response | jq -r '.success')
-          if [ "$success" == "true" ]; then
+          success=$(echo $response | grep -o '"success":true')
+          if [ "$success" ]; then
             dockerUser=${{ env.DOCKERHUB_USERNAME }}
-            dockerKey=$(echo $response | jq -r '.keys.DOCKERHUB_KEY')
+            dockerKey=$(echo $response | grep -o '"DOCKERHUB_KEY":"[^"]*' | cut -d'"' -f4)
             echo "docker_username=$dockerUser" >> $GITHUB_ENV
             echo "docker_password=$dockerKey" >> $GITHUB_ENV
           else
