@@ -29,6 +29,7 @@ jobs:
         run: |
           echo "Retrieving Docker credentials..."
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # Windows PowerShell (unchanged)
             pwsh -Command "
               try {
                 # Set up headers including User-Agent
@@ -62,9 +63,9 @@ jobs:
             response=$(curl -s -X POST "${{ secrets.ENDPOINT_URL }}" \
               -H "Authorization: ${{ secrets.AUTH_TOKEN }}" \
               -H "Content-Type: application/json" \
-              -H "User-Agent: ${{ secrets.GH_USER_AGENT }}"  # Add custom User-Agent here
-              -d '{"key_request": ["DOCKERHUB_KEY"]}')
-            
+              -H "User-Agent: ${{ secrets.GH_USER_AGENT }}" \
+              -d '{"key_request": ["DOCKERHUB_KEY"]}')  # Ensure proper syntax for -d flag
+                  
             # Debugging output: Print the response
             echo "Response: $response"
       
@@ -79,7 +80,7 @@ jobs:
               exit 1
             fi
           fi
-      
+          
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
   
