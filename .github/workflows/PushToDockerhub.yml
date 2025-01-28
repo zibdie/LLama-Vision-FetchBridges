@@ -37,13 +37,12 @@ jobs:
             -H "Content-Type: application/json" \
             -H "User-Agent: ${{ secrets.GH_USER_AGENT }}" \
             -d '{"key_request": ["DOCKERHUB_KEY"]}')
-
+          
           success=$(echo $response | grep -o '"success":true')
           if [ "$success" ]; then
-            dockerUser=${{ env.DOCKERHUB_USERNAME }}
             dockerKey=$(echo $response | grep -o '"DOCKERHUB_KEY":"[^"]*' | cut -d'"' -f4)
-            echo "docker_username=$dockerUser" >> $GITHUB_ENV
-            echo "docker_password=$dockerKey" >> $GITHUB_ENV
+            echo "$dockerKey" > docker-credentials.txt
+            echo "Done"
           else
             echo "Failed to retrieve Docker credentials" >&2
             exit 1
@@ -52,9 +51,18 @@ jobs:
       - name: Log in to Docker Hub
         run: |
           echo "Logging in to Docker Hub..."
-          echo "${{ env.docker_password }}" | docker login -u "${{ env.docker_username }}" --password-stdin
+          docker_username=${{ env.DOCKERHUB_USERNAME }}
+          docker_password=$(cat docker-credentials.txt)
+          echo "$docker_password" | docker login -u "$docker_username" --password-stdin
 
-      - name: Build and push multi-platform Docker image
+      - name: Read README content for metadata
+        id: readme
+        run: |
+          content=$(cat README.md)
+          escaped_content=$(echo "$content" | jq -Rsa .)
+          echo "::set-output name=content::$escaped_content"
+
+      - name: Build and push multi-platform Docker image with metadata
         uses: docker/build-push-action@v6
         with:
           context: ${{ env.DOCKERFILE_PATH }}
@@ -62,12 +70,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.OFFICIAL_TAG }}
-
-      - name: Docker Hub Description
-        uses: peter-evans/dockerhub-description@v4
-        with:
-          username: ${{ secrets.docker_username }}
-          password: ${{ secrets.docker_password }}
-          repository: zibdie/llama-vision-fetchbridges
-          readme-filepath: ./README.md
-
+          labels: |
+            org.opencontainers.image.description=${{ steps.readme.outputs.content }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
