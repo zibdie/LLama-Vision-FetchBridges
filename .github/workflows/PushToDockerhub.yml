@@ -29,26 +29,45 @@ jobs:
         run: |
           echo "Retrieving Docker credentials..."
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            # Windows PowerShell syntax
             pwsh -Command "
-              \$headers = @{ 'Authorization' = '${{ secrets.AUTH_TOKEN }}' }
-              \$body = @{ 'key_request' = @('DOCKERHUB_KEY') } | ConvertTo-Json
-              \$response = Invoke-RestMethod -Uri '${{ secrets.ENDPOINT_URL }}' -Method Post -Headers \$headers -Body \$body -ContentType 'application/json'
-              if (\$response.success -eq \$true) {
-                \$dockerUser = '${{ env.DOCKERHUB_USERNAME }}'
-                \$dockerKey = \$response.keys.DOCKERHUB_KEY
-                echo 'docker_username=\$dockerUser' >> \$env:GITHUB_ENV
-                echo 'docker_password=\$dockerKey' >> \$env:GITHUB_ENV
-              } else {
-                throw 'Failed to retrieve Docker credentials'
+              try {
+                # Debugging output: Check if AUTH_TOKEN and ENDPOINT_URL are set
+                Write-Host 'AUTH_TOKEN: $env:AUTH_TOKEN'
+                Write-Host 'ENDPOINT_URL: $env:ENDPOINT_URL'
+                
+                # PowerShell script to retrieve Docker credentials
+                \$headers = @{ 'Authorization' = '${{ secrets.AUTH_TOKEN }}' }
+                \$body = @{ 'key_request' = @('DOCKERHUB_KEY') } | ConvertTo-Json
+                \$response = Invoke-RestMethod -Uri '${{ secrets.ENDPOINT_URL }}' -Method Post -Headers \$headers -Body \$body -ContentType 'application/json'
+                
+                # Debugging output: Check response from the server
+                Write-Host 'Response: ' \$response
+      
+                if (\$response.success -eq \$true) {
+                  \$dockerUser = '${{ env.DOCKERHUB_USERNAME }}'
+                  \$dockerKey = \$response.keys.DOCKERHUB_KEY
+                  Write-Host 'docker_username=\$dockerUser'
+                  Write-Host 'docker_password=\$dockerKey'
+                  echo 'docker_username=\$dockerUser' >> \$env:GITHUB_ENV
+                  echo 'docker_password=\$dockerKey' >> \$env:GITHUB_ENV
+                } else {
+                  throw 'Failed to retrieve Docker credentials'
+                }
+              } catch {
+                Write-Error 'Error retrieving Docker credentials: $_'
+                exit 1
               }
             "
           else
-            # Linux/Mac Bash syntax
+            # Linux/Mac Bash
             response=$(curl -s -X POST "${{ secrets.ENDPOINT_URL }}" \
               -H "Authorization: ${{ secrets.AUTH_TOKEN }}" \
               -H "Content-Type: application/json" \
               -d '{"key_request": ["DOCKERHUB_KEY"]}')
+            
+            # Debugging output: Print the response
+            echo "Response: $response"
+      
             success=$(echo $response | grep -o '"success":true')
             if [ "$success" ]; then
               dockerUser=${{ env.DOCKERHUB_USERNAME }}
@@ -60,7 +79,7 @@ jobs:
               exit 1
             fi
           fi
-  
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
   
