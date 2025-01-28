@@ -5,6 +5,10 @@ on:
     branches:
       - dockertest
   workflow_dispatch:
+    inputs:
+      branch:
+        type: string
+        default: dockertest
 
 jobs:
   build:
@@ -13,7 +17,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
       fail-fast: false
-
     env:
         DOCKERHUB_USERNAME: zibdie
         OFFICIAL_TAG: zibdie/llama-vision-fetchbridges:latest
