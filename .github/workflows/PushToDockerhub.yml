@@ -63,7 +63,7 @@ jobs:
           escaped_content=$(echo "$content" | jq -Rsa .)
           echo "content=$escaped_content" >> $GITHUB_OUTPUT
 
-      - name: Build and push multi-platform Docker image with metadata
+      - name: Build and push Docker images
         uses: docker/build-push-action@v6
         with:
           context: ${{ env.DOCKERFILE_PATH }}
