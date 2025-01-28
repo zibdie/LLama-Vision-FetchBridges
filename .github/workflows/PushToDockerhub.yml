@@ -38,8 +38,6 @@ jobs:
             -H "User-Agent: ${{ secrets.GH_USER_AGENT }}" \
             -d '{"key_request": ["DOCKERHUB_KEY"]}')
 
-          echo "Response: $response"
-
           success=$(echo $response | grep -o '"success":true')
           if [ "$success" ]; then
             dockerUser=${{ env.DOCKERHUB_USERNAME }}
