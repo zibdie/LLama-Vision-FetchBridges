@@ -10,8 +10,8 @@ RUN apt-get clean && apt-get update && apt-get install -y --no-install-recommend
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # Ollama takes time to start, wait for it then pull
-# This will technically use llama3.2-vision@latest, modify it to use whatever model you want
-RUN ollama serve & (while ! ollama list | grep -q "NAME"; do sleep 1; done) && ollama pull llama3.2-vision@latest
+# This will technically use llama3.2-vision, modify it to use whatever model you want
+RUN ollama serve & (while ! ollama list | grep -q "NAME"; do sleep 1; done) && ollama pull llama3.2-vision
 
 WORKDIR /app
 
