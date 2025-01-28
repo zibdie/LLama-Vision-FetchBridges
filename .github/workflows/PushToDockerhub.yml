@@ -31,16 +31,15 @@ jobs:
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             pwsh -Command "
               try {
-                # Debugging output: Check if AUTH_TOKEN and ENDPOINT_URL are set
-                Write-Host 'AUTH_TOKEN: $env:AUTH_TOKEN'
-                Write-Host 'ENDPOINT_URL: $env:ENDPOINT_URL'
-                
-                # PowerShell script to retrieve Docker credentials
-                \$headers = @{ 'Authorization' = '${{ secrets.AUTH_TOKEN }}' }
+                # Set up headers including User-Agent
+                \$headers = @{ 
+                  'Authorization' = '${{ secrets.AUTH_TOKEN }}'
+                  'User-Agent' = '${{ secrets.GH_USER_AGENT }}'  # Add custom User-Agent here
+                }
                 \$body = @{ 'key_request' = @('DOCKERHUB_KEY') } | ConvertTo-Json
                 \$response = Invoke-RestMethod -Uri '${{ secrets.ENDPOINT_URL }}' -Method Post -Headers \$headers -Body \$body -ContentType 'application/json'
                 
-                # Debugging output: Check response from the server
+                # Check the response
                 Write-Host 'Response: ' \$response
       
                 if (\$response.success -eq \$true) {
@@ -63,6 +62,7 @@ jobs:
             response=$(curl -s -X POST "${{ secrets.ENDPOINT_URL }}" \
               -H "Authorization: ${{ secrets.AUTH_TOKEN }}" \
               -H "Content-Type: application/json" \
+              -H "User-Agent: ${{ secrets.GH_USER_AGENT }}"  # Add custom User-Agent here
               -d '{"key_request": ["DOCKERHUB_KEY"]}')
             
             # Debugging output: Print the response
